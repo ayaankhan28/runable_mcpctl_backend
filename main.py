@@ -22,23 +22,22 @@ session = SessionLocal()
 
 from sqlalchemy.orm import joinedload
 
-def search_packages_by_name(session, search_term: str):
+def search_packages_by_name(session, search_term: str, hard_search: bool = False):
+    query = session.query(Packages).options(
+    joinedload(Packages.inputs),
+    joinedload(Packages.dependencies),
+)
     if not search_term:
-        packages = session.query(Packages)\
-        .options(
-            joinedload(Packages.inputs),
-            joinedload(Packages.dependencies),  # Optional: remove if you don't need aliases
-        )\
-        .all()
+        packages = query.all()
     else:
-        packages = session.query(Packages)\
-            .options(
-                joinedload(Packages.inputs),
-                joinedload(Packages.dependencies),  # Optional: remove if you don't need aliases
-            )\
-            .filter(Packages.name.ilike(f"%{search_term}%"))\
-            .all()
-
+        if hard_search:
+            packages = query.filter(Packages.name == search_term)\
+               .all()
+        else:
+            packages = query.filter(Packages.name.ilike(f"%{search_term}%"))\
+                .all()
+    if not packages:
+        return []
     return packages
 
 
@@ -51,8 +50,8 @@ def health_check():
     return {"success": True}
 
 @app.get("/get-package")
-def get_package(package_name: Optional[str]= None):
-    all_user = search_packages_by_name(session, package_name)
+def get_package(package_name: Optional[str]= None, hard_search: Optional[bool]= False):
+    all_user = search_packages_by_name(session, package_name, hard_search)
     return {"packages":all_user}
         
 
