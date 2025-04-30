@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from typing import Optional
 from sqlalchemy import create_engine, Column, Integer, String, DateTime
 # from uuid import UUID
@@ -32,7 +32,7 @@ def search_packages_by_name(session, search_term: str, hard_search: bool = False
     else:
         if hard_search:
             packages = query.filter(Packages.name == search_term)\
-               .all()
+                .all()
         else:
             packages = query.filter(Packages.name.ilike(f"%{search_term}%"))\
                 .all()
@@ -40,10 +40,15 @@ def search_packages_by_name(session, search_term: str, hard_search: bool = False
         return []
     return packages
 
-
+def get_package_by_id(session, package_id: str):
+    query = session.query(Packages).options(
+        joinedload(Packages.inputs),
+        joinedload(Packages.dependencies),
+    )
+    package = query.filter(Packages.id == package_id).first()
+    return package
 
 app = FastAPI()
-
 
 @app.get("/")
 def health_check():
@@ -53,6 +58,10 @@ def health_check():
 def get_package(package_name: Optional[str]= None, hard_search: Optional[bool]= False):
     all_user = search_packages_by_name(session, package_name, hard_search)
     return {"packages":all_user}
-        
 
-
+@app.get("/get-package/{package_id}")
+def get_package_by_id_endpoint(package_id: str):
+    package = get_package_by_id(session, package_id)
+    if not package:
+        raise HTTPException(status_code=404, detail="Package not found")
+    return {"package": package}
